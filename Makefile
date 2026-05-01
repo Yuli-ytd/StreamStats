@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -std=c++11 -O3 -fPIC
+CXXFLAGS = -std=c++11 -O3
 
 PYTHON_INC := $(shell python3-config --includes)
 
@@ -16,13 +16,21 @@ endif
 
 INC := $(PYTHON_INC) $(PYBIND11_INC)
 
+all: streamstats.so test_ringbuff
+
 streamstats.so: src/main.cpp
-	$(CXX) $(CXXFLAGS) $(INC) -shared $< -o $@
+	$(CXX) $(CXXFLAGS) -fPIC $(INC) -shared $< -o $@
 
-.PHONY = test clean
+test_ringbuff: test/test_ringbuff.cpp include/ringbuff.hpp
+	$(CXX) $(CXXFLAGS) $(INTERNAL_INC) $< -o $@
 
-test: streamstats.so
+.PHONY = all test clean
+
+test: streamstats.so test_ringbuff
+	@echo "\n...Running C++ unit tests..."
+	./test_ringbuff
+	@echo "\n...Running Python integration tests..."
 	PYTHONPATH=. pytest test/ -v
 
 clean:
-	rm -rf *.so __pycache__ .pytest_cache
+	rm -rf *.so test_ringbuff __pycache__ .pytest_cache */__pycache__
