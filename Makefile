@@ -15,8 +15,9 @@ ifeq ($(strip $(PYBIND11_INC)),)
 endif
 
 INC := $(PYTHON_INC) $(PYBIND11_INC)
+INTERNAL_INC := -Iinclude
 
-all: streamstats.so test_ringbuff
+all: streamstats.so test_ringbuff test_scalar_stream
 
 streamstats.so: src/main.cpp
 	$(CXX) $(CXXFLAGS) -fPIC $(INC) -shared $< -o $@
@@ -24,13 +25,17 @@ streamstats.so: src/main.cpp
 test_ringbuff: test/test_ringbuff.cpp include/ringbuff.hpp
 	$(CXX) $(CXXFLAGS) $(INTERNAL_INC) $< -o $@
 
+test_scalar_stream: test/test_scalar_stream.cpp include/scalar_stream.hpp include/ringbuff.hpp
+	$(CXX) $(CXXFLAGS) $(INTERNAL_INC) $< -o $@
+
 .PHONY = all test clean
 
-test: streamstats.so test_ringbuff
+test: streamstats.so test_ringbuff test_scalar_stream
 	@echo "\n...Running C++ unit tests..."
 	./test_ringbuff
+	./test_scalar_stream
 	@echo "\n...Running Python integration tests..."
 	PYTHONPATH=. pytest test/ -v
 
 clean:
-	rm -rf *.so test_ringbuff __pycache__ .pytest_cache */__pycache__
+	rm -rf *.so test_* __pycache__ .pytest_cache */__pycache__

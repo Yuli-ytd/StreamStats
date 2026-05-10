@@ -1,3 +1,4 @@
+#pragma once
 #include <vector>
 #include <cstddef>
 #include <cassert>
@@ -30,6 +31,11 @@ public:
     {
         std::size_t start = (m_count < m_capacity)? 0 : m_head;
         return m_data[(start + i) % m_capacity];
+    }
+
+    void reset(){
+        m_head = 0;
+        m_count = 0;
     }
 
     std::size_t capacity() const { return m_capacity; }
