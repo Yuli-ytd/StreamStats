@@ -1,12 +1,14 @@
 #include <pybind11/pybind11.h>
-
-int add(){
-    int a = 3;
-    int b = 5;
-    return a+b;
-}
+#include <scalar_stream.hpp>
 
 PYBIND11_MODULE(streamstats, m){
     m.doc() = "Streaming Statistic Function Modules";
-    m.def("add", &add, "Basic addition function for testing Makefile works");
+    pybind11::class_<ScalarStream<double>>(m, "StreamStats")
+        .def(pybind11::init<std::size_t>())
+        .def("push", &ScalarStream<double>::push)
+        .def("size", &ScalarStream<double>::size)
+        .def("window_size", &ScalarStream<double>::window_size)
+        .def("mean", &ScalarStream<double>::mean)
+        .def("variance", &ScalarStream<double>::variance)
+        .def("reset", &ScalarStream<double>::reset);
 }
