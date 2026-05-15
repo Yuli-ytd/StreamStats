@@ -20,7 +20,7 @@ INTERNAL_INC := -Iinclude
 all: streamstats.so test_ringbuff test_scalar_stream
 
 streamstats.so: src/main.cpp
-	$(CXX) $(CXXFLAGS) -fPIC $(INC) -shared $< -o $@
+	$(CXX) $(CXXFLAGS) $(INTERNAL_INC) -fPIC $(INC) -shared $< -o $@
 
 test_ringbuff: test/test_ringbuff.cpp include/ringbuff.hpp
 	$(CXX) $(CXXFLAGS) $(INTERNAL_INC) $< -o $@
