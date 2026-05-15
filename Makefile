@@ -19,7 +19,7 @@ INTERNAL_INC := -Iinclude
 
 all: streamstats.so test_ringbuff test_scalar_stream
 
-streamstats.so: src/main.cpp
+streamstats.so: src/main.cpp include/scalar_stream.hpp include/ringbuff.hpp
 	$(CXX) $(CXXFLAGS) $(INTERNAL_INC) -fPIC $(INC) -shared $< -o $@
 
 test_ringbuff: test/test_ringbuff.cpp include/ringbuff.hpp
@@ -28,7 +28,7 @@ test_ringbuff: test/test_ringbuff.cpp include/ringbuff.hpp
 test_scalar_stream: test/test_scalar_stream.cpp include/scalar_stream.hpp include/ringbuff.hpp
 	$(CXX) $(CXXFLAGS) $(INTERNAL_INC) $< -o $@
 
-.PHONY = all test clean
+.PHONY: all test clean
 
 test: streamstats.so test_ringbuff test_scalar_stream
 	@echo "\n...Running C++ unit tests..."
