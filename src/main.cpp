@@ -9,6 +9,17 @@ PYBIND11_MODULE(streamstats, m){
         .def("size", &ScalarStream<double>::size)
         .def("window_size", &ScalarStream<double>::window_size)
         .def("mean", &ScalarStream<double>::mean)
-        .def("variance", &ScalarStream<double>::variance)
+        .def("variance",
+            [](const ScalarStream<double>& self, int ddof){
+                if(ddof == 0){
+                    return self.population_variance();
+                }
+                if(ddof == 1){
+                    return self.sample_variance();
+                }
+                throw pybind11::value_error("only ddof=0 or ddof=1 are supported.");
+            },
+            pybind11::arg("ddof") = 0
+        )
         .def("reset", &ScalarStream<double>::reset);
 }
