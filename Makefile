@@ -26,9 +26,9 @@ test_ringbuff: test/test_ringbuff.cpp include/ringbuff.hpp
 	$(CXX) $(CXXFLAGS) $(INTERNAL_INC) $< -o $@
 
 test_scalar_stream: test/test_scalar_stream.cpp include/scalar_stream.hpp include/ringbuff.hpp
-	$(CXX) $(CXXFLAGS) $(INTERNAL_INC) $< -o $@
+	$(CXX) $(CXXFLAGS) $(INTERNAL_INC) $< -o $@ 
 
-.PHONY: all test clean
+.PHONY: all test benchmark clean
 
 test: streamstats.so test_ringbuff test_scalar_stream
 	@echo "\n...Running C++ unit tests..."
@@ -36,6 +36,10 @@ test: streamstats.so test_ringbuff test_scalar_stream
 	./test_scalar_stream
 	@echo "\n...Running Python integration tests..."
 	PYTHONPATH=. pytest test/ -v
+
+benchmark: streamstats.so
+	@echo "\n...Benchmark runtime tests..."
+	PYTHONPATH=. python3 benchmark/benchmark_runtime.py
 
 clean:
 	rm -rf *.so test_* __pycache__ .pytest_cache */__pycache__
