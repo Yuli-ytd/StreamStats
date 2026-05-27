@@ -28,7 +28,7 @@ test_ringbuff: test/test_ringbuff.cpp include/ringbuff.hpp
 test_scalar_stream: test/test_scalar_stream.cpp include/scalar_stream.hpp include/ringbuff.hpp
 	$(CXX) $(CXXFLAGS) $(INTERNAL_INC) $< -o $@ 
 
-.PHONY: all test benchmark clean
+.PHONY: all test benchmark  show-config clean
 
 test: streamstats.so test_ringbuff test_scalar_stream
 	@echo "\n...Running C++ unit tests..."
@@ -40,6 +40,10 @@ test: streamstats.so test_ringbuff test_scalar_stream
 benchmark: streamstats.so
 	@echo "\n...Benchmark runtime tests..."
 	PYTHONPATH=. python3 benchmark/benchmark_runtime.py
+
+show-config:
+	@echo "PYBIND11_INC = $(PYBIND11_INC)"
+	@echo "PYTHON_INC = $(PYTHON_INC)"
 
 clean:
 	rm -rf *.so test_* __pycache__ .pytest_cache */__pycache__
