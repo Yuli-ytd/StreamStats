@@ -3,206 +3,355 @@ Stream Statistics for Real-time Data
 ======================================
 
 **StreamStats**:
-A high-performance C++11 library with Python bindings for real-time streaming
+A C++11 library with Python bindings for real-time streaming
 numerical statistics.
 
-Basic Information
-=================
+Numerical analysis often involves continuous data streams, such as
+high-frequency financial ticks, sensor telemetry, and real-time experimental
+signals. Unlike static datasets, streaming data must be processed as data
+points arrive sequentially. In many applications, the complete stream may be
+too large to store entirely in memory.
 
-GitHub Repository: https://github.com/Yuli-ytd/StreamStats
+Efficiently computing statistics over a sliding window, defined as the most
+recent ``W`` elements, is a common operation in these domains. StreamStats
+provides a C++ implementation for maintaining rolling statistics with fixed
+window storage, while exposing a Python interface for easier experimentation
+and integration into data analysis workflows.
 
-Numerical analysis often involves continuous data streams. For example, 
-high-frequency financial ticks, sensor telemetry, and other real-time 
-signals. Unlike static datasets, streaming data must be processed immediately. 
-Data points arrive sequentially and can be too voluminous to store entirely 
-in memory.
-
-Efficiently computing statistics over a "sliding window" (the most recent 
-`W` elements) is a key operation in these domains. This project, StreamStats,
-offers a C++ infrastructure to handle these tasks with minimal overhead,
-while providing a seamless interface for Python-based data science workflows.
+The current implementation focuses on rolling scalar mean and variance over a
+fixed-size sliding window.
 
 Problem to Solve
 ================
 
-The primary challenge in streaming statistics is the trade-off between 
-**computational latency** and **numerical stability** in high-frequency 
-environments.
+The primary challenge in streaming statistics is the trade-off between
+computational latency, memory overhead, and numerical stability in
+high-frequency environments.
 
-1. **Redundant Computation:** A naive implementation recomputes statistics 
-from scratch each time the window advances. For a stream of length `N` and 
-a window size `W`, this requires `O(NW)` operations. As `W` grows, latency 
-becomes a bottleneck in real-time systems. StreamStats uses incremental 
-algorithms to reduce total complexity to `O(N)`.
+1. **Redundant Computation:** A naive implementation recomputes statistics
+   from scratch each time the window advances. For a stream of length ``N`` and
+   a window size ``W``, this requires ``O(NW)`` operations. As ``W`` grows,
+   this repeated computation becomes a bottleneck in real-time systems.
+   StreamStats avoids full-window recomputation by updating maintained summary
+   values as new samples arrive.
 
-2. **Memory Overhead and Jitter:** In Python-based pipelines, array slicing 
-(e.g., ``data[-W:]``) can create memory copies. Frequent allocations may 
-trigger garbage collection, causing unpredictable timing jitter. By using a 
-C++ ``RingBuffer``, StreamStats keeps memory usage fixed and avoids expensive 
-copying.
+2. **Memory Overhead and Jitter:** In Python-based pipelines, repeatedly
+   slicing arrays, such as ``data[-W:]``, may create temporary objects and
+   increase allocation overhead. Frequent allocation may also introduce
+   unpredictable runtime behavior. StreamStats uses a fixed-size C++
+   ``RingBuffer<T>`` to store the active window and avoid resizing the storage
+   during streaming.
 
-3. **Numerical Instability:** Naive variance formulas are prone to 
-catastrophic cancellation due to floating-point precision limits. StreamStats 
-uses Welford’s algorithm to maintain robust and accurate results, even in 
-long-running streams.
+3. **Numerical Stability:** Naive variance formulas can suffer from
+   floating-point cancellation, especially when the stream is long or the data
+   has large offsets. StreamStats maintains the rolling mean and the second
+   central moment ``m2`` incrementally, using a Welford-style update strategy
+   for improved numerical behavior compared with direct sum-of-squares
+   recomputation.
 
-To address these issues, StreamStats implements incremental C++ algorithms 
-that update statistics in `O(1)` or `O(log W)` time, while efficiently sharing 
-memory buffers with Python to minimize unnecessary copying.
+The current implementation focuses on scalar rolling mean and variance. It
+does not attempt to be a full replacement for NumPy or pandas rolling-window
+operations.
 
 Prospective Users
 =================
 
-StreamStats is intended for students, researchers, and developers who need to 
-compute basic streaming statistics with low latency while still working in 
+StreamStats is intended for students, researchers, and developers who need to
+compute basic streaming statistics with low latency while still working from
 Python.
 
 Potential users include:
 
-- **Quantitative Finance Learners and Practitioners:** Users working with 
-  market time-series data who need rolling statistics (e.g., moving average 
-  or volatility) updated as new ticks arrive.
+- **Quantitative Finance Learners and Practitioners:** Users working with
+  market time-series data who need rolling statistics, such as moving average
+  or volatility, updated as new ticks arrive.
 
-- **IoT and Monitoring Developers:** Users building sensor-data pipelines that 
+- **IoT and Monitoring Developers:** Users building sensor-data pipelines that
   require real-time statistical summaries for simple anomaly detection.
 
-- **Signal Processing and Experimental Research Students:** Users handling 
-  continuous measurement data (e.g., lab instruments) and applying window-based 
-  statistics for preprocessing.
+- **Signal Processing and Experimental Research Students:** Users handling
+  continuous measurement data, such as laboratory instrument signals, and
+  applying window-based statistics for preprocessing.
 
-Overall, StreamStats provides a C++ implementation for performance-critical 
-updates and a Python interface for easier experimentation and integration into 
-data workflows.
+Overall, StreamStats separates the performance-critical update logic into C++
+while keeping the user-facing interface accessible from Python.
 
 System Architecture
 ===================
 
-StreamStats follows a two-layer architecture to balance performance and 
-usability: a C++ core for streaming computation and a Python interface 
-for user-facing workflows.
+StreamStats follows a two-layer architecture: a C++ core for streaming
+computation and a Python binding layer for user-facing workflows.
 
 1. C++ Core Layer
 -----------------
-The core layer is implemented in C++11 and focuses on fixed-cost updates for
-streaming statistics.
 
-- **RingBuffer<T>** is the primary data container. It stores the most recent
-  `W` samples in a fixed-size contiguous buffer, which is designed to be 
-  directly accessible by Python via the buffer protocol to achieve zero-copy 
-  data sharing.
+The core layer is implemented in C++11 and focuses on fixed-size storage and
+incremental statistic updates.
 
-- **Statistics modules** are updated incrementally when a new value arrives.
-  The first target is rolling mean and variance (Welford-based update).
-  Additional statistics (e.g., median) can be added as separate modules later.
+- ``RingBuffer<T>`` is the primary data container. It stores the most recent
+  ``W`` samples in a fixed-size buffer. Once the buffer is created, its
+  capacity remains fixed, which avoids repeated memory reallocation during
+  streaming.
 
-- This layer is designed to minimize repeated computation and avoid frequent
-  memory allocation during streaming.
+- ``ScalarStream<T>`` is the main streaming-statistics class. It is built on
+  top of ``RingBuffer<T>`` and maintains the rolling mean and ``m2`` value.
+  When a new sample is pushed, the class updates the maintained statistics
+  according to whether the window is still growing or already full.
+
+- ``ScalarStream<T>`` currently requires ``T`` to be a floating-point type.
+  This design avoids integer-division behavior and allows undefined numerical
+  results to be represented as NaN.
+
+This layer is designed to minimize repeated computation and avoid frequent
+memory allocation during streaming.
 
 2. Python Binding Layer
 -----------------------
-The Python layer is built with pybind11 and provides Python API bindings
-for data analysis workflows.
 
-- Python users can push new samples and query current statistics directly.
+The Python layer is built with pybind11 and provides Python bindings for data
+analysis workflows.
 
-- The initial implementation will expose concrete floating-point types
-  (for example, ``float`` and ``double`` bindings).
+- Python users can push new scalar samples and query the current statistics
+  directly.
 
-- The binding layer leverages pybind11's buffer protocol support, allowing 
-  Python libraries like NumPy to view the underlying C++ memory without 
-  duplicating data.
+- The current implementation exposes two concrete internal classes,
+  ``_StreamStatsF64`` and ``_StreamStatsF32``, and a factory function
+  ``StreamStats(window_size, dtype=None)``.
+
+- The factory function returns a float64-backed stream by default. Users may
+  also request ``np.float64`` or ``np.float32`` explicitly through the
+  ``dtype`` argument.
+
+The current Python binding exposes scalar update and query methods. It does
+not currently expose the underlying C++ ring buffer through the Python buffer
+protocol.
 
 3. Data Flow and Scope
 ----------------------
-At each update step, a new sample is inserted into the ring buffer, expired 
-data is logically removed, and enabled statistics are updated incrementally.
 
-- The first version focuses on correctness, numerical stability, and 
-  predictable runtime behavior in a single-thread setting.
+At each update step, a new sample is inserted into the ring buffer. If the
+window is already full, the oldest sample is replaced. ``ScalarStream<T>``
+then updates the maintained mean and variance-related state.
 
-- This version also prioritizes efficient memory sharing between C++ and 
-  Python, ensuring that the rolling window data can be analyzed in Python with 
-  zero-copy overhead.
+The current version focuses on correctness, numerical behavior, and predictable
+single-threaded runtime performance for rolling scalar statistics.
 
 API Description
 ===============
 
 StreamStats provides a minimal API in both C++ and Python for rolling
-statistics on streaming scalar data.  The first version focuses on essential
+statistics on streaming scalar data. The current version focuses on essential
 operations and keeps advanced features as future work.
 
-In C++, a class template ``ScalarStream<T>`` will be provided under namespace
-``streamstats``.  The constructor takes the window size, and the object 
-supports incremental updates and basic statistic queries.
+1. C++ API
+----------
 
-Planned core methods in C++:
+The main C++ class is ``ScalarStream<T>``. The template parameter ``T`` must be
+a floating-point type.
+
+Main methods:
 
 - ``ScalarStream<T>(std::size_t window_size)``
 - ``void push(T value)``
 - ``std::size_t size() const``
+- ``std::size_t window_size() const``
 - ``T mean() const``
 - ``T variance() const``
+- ``T sample_variance() const``
+- ``T population_variance() const``
 - ``void reset()``
 
-In Python, ``pybind11`` bindings will expose concrete floating-point types (for
-example, ``StreamStatsF64`` and ``StreamStatsF32``) with similar method names,
-so users can run streaming updates in Python while using the C++ core.
+The constructor takes the window size. A window size of zero is invalid and
+raises an exception.
 
-The first version supports single-value updates through ``push()`` only.
-Batch input support is considered optional future work.
+In the C++ API, ``variance()`` is equivalent to ``sample_variance()``.
+``population_variance()`` is provided separately for population variance.
 
-Schedule
-========
+2. Python API
+-------------
 
-Week 1 (03/23 to 03/29):
+The Python interface provides a factory function:
 
- Project setup (GitHub repo, Makefile, pybind11 minimal build).
+- ``streamstats.StreamStats(window_size)``
+- ``streamstats.StreamStats(window_size, dtype=np.float64)``
+- ``streamstats.StreamStats(window_size, dtype=np.float32)``
 
-Week 2 (03/30 to 04/05):
+Example usage:
 
- Implement ``RingBuffer<T>`` and its Python bindings with fixed-size storage 
- and wrap-around logic.
+.. code-block:: python
 
-Week 3 (04/06 to 04/12):
+   import numpy as np
+   import streamstats
 
- Implement rolling mean/variance (Welford-based update) and write initial 
- pytest to verify it.
+   s = streamstats.StreamStats(4, dtype=np.float64)
 
-Week 4 (04/20 to 04/26): (after midterm exam week)
+   s.push(1.0)
+   s.push(2.0)
+   s.push(3.0)
 
- Add C++ edge cases, zero-copy optimization research, and integration testing.
+   print(s.mean())
+   print(s.variance(ddof=0))  # population variance
+   print(s.variance(ddof=1))  # sample variance
 
-Week 5 (04/27 to 05/03):
+Main Python methods:
 
- Implement zero-copy memory sharing and optimize buffer access patterns for 
- performance.
+- ``s.push(value)``
+- ``s.size()``
+- ``s.window_size()``
+- ``s.mean()``
+- ``s.variance(ddof=0)``
+- ``s.variance(ddof=1)``
+- ``s.reset()``
 
-Week 6 (05/04 to 05/10):
+In Python, ``variance(ddof=0)`` returns the population variance, and
+``variance(ddof=1)`` returns the sample variance. This follows the common
+``ddof`` convention used by NumPy.
 
- Comprehensive testing (full pytest suite), benchmarking, and documentation 
- review.
+Only ``ddof=0`` and ``ddof=1`` are currently supported. Other ``ddof`` values
+raise ``ValueError``.
 
-Week 7 (05/11 to 05/17):
+The current version supports single-value updates through ``push()`` only.
+Batch input support is considered future work.
 
- Performance benchmarking against naive Python implementation and final 
- optimization tuning.
+Numerical Behavior
+==================
 
-Week 8 (05/18 to 05/24):
+The numerical behavior depends on the number of samples currently stored in the
+window.
 
- Buffer week for bug fixes, documentation cleanup, 
- and final presentation preparation.
+1. Empty Stream
+---------------
 
-Optional Extensions
-====================
+When the stream contains no samples:
 
-If the core milestones are completed on time, 
-the following topics may be explored:
+- ``mean()`` returns NaN.
+- ``population_variance()`` returns NaN.
+- ``sample_variance()`` returns NaN.
+- In Python, both ``variance(ddof=0)`` and ``variance(ddof=1)`` return NaN.
 
-1. Rolling median support.
-2. Batch update API (e.g., ``push_batch()``).
-3. Better NumPy interoperability (e.g., window export).
-4. Additional benchmark cases.
-5. Preliminary thread-safety design discussion.
+2. One Sample
+-------------
 
-These items are optional and not required for the first project milestone.
+When the stream contains exactly one sample:
 
+- ``mean()`` returns the sample value.
+- ``population_variance()`` returns ``0``.
+- ``sample_variance()`` returns NaN.
+- In Python, ``variance(ddof=0)`` returns ``0`` and ``variance(ddof=1)``
+  returns NaN.
+
+3. Two or More Samples
+----------------------
+
+When the stream contains two or more samples:
+
+- ``mean()`` is defined.
+- ``population_variance()`` is defined.
+- ``sample_variance()`` is defined.
+- In Python, both ``variance(ddof=0)`` and ``variance(ddof=1)`` are defined.
+
+Build and Test
+==============
+
+The project uses a Makefile-based build flow. The Python extension module is
+built from the C++ source code through pybind11.
+
+Before building, initialize the vendored pybind11 submodule if necessary:
+
+.. code-block:: bash
+
+   git submodule update --init --recursive
+
+Install Python dependencies used by the tests:
+
+.. code-block:: bash
+
+   python -m pip install pytest numpy
+
+Build and run all tests:
+
+.. code-block:: bash
+
+   make clean
+   make test
+
+The test target runs both C++ unit tests and Python integration tests.
+
+Benchmark
+=========
+
+StreamStats includes a runtime benchmark for comparing rolling-statistics
+update performance.
+
+Run the benchmark with:
+
+.. code-block:: bash
+
+   make benchmark
+
+The benchmark compares three approaches:
+
+- StreamStats incremental update.
+- Naive Python recomputation.
+- NumPy recomputation.
+
+The benchmark evaluates multiple stream lengths and window sizes. It reports
+median runtime, runtime standard deviation, nanoseconds per update, and speedup
+against the Python and NumPy recomputation baselines.
+
+Benchmark results are written to:
+
+.. code-block:: text
+
+   benchmark/results_runtime.csv
+
+This benchmark focuses on scalar rolling mean and variance update performance.
+It does not benchmark zero-copy NumPy access, batch input, or full-array
+rolling-window APIs.
+
+For details about the benchmark methodology, compared methods, evaluation
+metrics, and result interpretation, see ``benchmark/README.rst``.
+
+Development Summary
+===================
+
+The project started as a proposal for a C++/Python streaming-statistics
+library and was gradually refined into a focused implementation of rolling
+mean and variance.
+
+The final version includes:
+
+- a fixed-size C++ ``RingBuffer<T>``;
+- a floating-point ``ScalarStream<T>`` class;
+- pybind11 bindings for Python;
+- support for float64 and float32 streams from Python;
+- C++ unit tests;
+- Python integration tests;
+- GitHub Actions CI;
+- runtime benchmark support.
+
+The implementation emphasizes correctness, clear API behavior, and measurable
+runtime performance for scalar streaming statistics.
+
+Limitations and Future Work
+===========================
+
+The following features are left as future work:
+
+1. **Zero-copy NumPy window access:** The current Python binding does not expose
+   the underlying C++ ring buffer through the Python buffer protocol.
+
+2. **Batch input API:** The current implementation supports single-value
+   updates through ``push()`` only. A future version may support batch input,
+   such as ``push_batch()``.
+
+3. **Additional statistics:** The current implementation supports rolling mean
+   and variance. Future versions may add rolling median, minimum, maximum, or
+   other statistics.
+
+4. **Integer input support:** ``ScalarStream<T>`` currently requires a
+   floating-point stream type. Supporting integer input with floating-point
+   accumulation is future work.
+
+5. **Thread safety:** The current implementation is intended for single-threaded
+  use. Thread-safety guarantees are not currently provided.
